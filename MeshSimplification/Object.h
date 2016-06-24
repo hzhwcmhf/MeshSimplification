@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Point.h"
+
 class Object
 {
 public:
@@ -7,14 +9,43 @@ public:
 	struct Edge;
 	struct Face;
 
+	struct ArgMatrix
+	{
+		double a[4][4];
+
+		ArgMatrix& operator+=(const ArgMatrix &b)
+		{
+			for (int i = 0;i < 4;i++) {
+				for (int j = 0;j < 4;j++) {
+					a[i][j] += b.a[i][j];
+				}
+			}
+			return *this;
+		}
+		ArgMatrix& operator-=(const ArgMatrix &b)
+		{
+			for (int i = 0;i < 4;i++) {
+				for (int j = 0;j < 4;j++) {
+					a[i][j] -= b.a[i][j];
+				}
+			}
+			return *this;
+		}
+		void clear()
+		{
+			for (int i = 0;i < 4;i++) {
+				for (int j = 0;j < 4;j++) {
+					a[i][j] = 0;
+				}
+			}
+		}
+	};
 	struct Vertex
 	{
-		union {
-			struct { /*数组索引*/double p[3]; };
-			struct { /*变量索引*/double x, y, z; };
-		};
+		Point p;
 		int id;
-		Edge* e;
+		//Edge* e;
+		ArgMatrix k;
 	};
 
 	struct Edge
@@ -22,13 +53,16 @@ public:
 		Edge *next, *prev, *pair;
 		Face* f;
 		Vertex *p;
+
+		Point pos;
+		double cost;
 	};
 
 	struct Face
 	{
-		double a, b, c, d;
-		Edge* e;
-		
+		ArgMatrix k;
+		//Edge* e;
+
 		void makeArg(const Vertex &ap, const Vertex &bp, const Vertex &cp);
 	};
 private:
@@ -38,8 +72,13 @@ private:
 
 	bool Parse(FILE * fp);
 	void buildStruct();
+
+	std::tuple<Point, double> calEdgeCost(Vertex *a, Vertex *b, Edge* e);
 public:
 	bool Load(const char *filename);
 
+	void simpify(double factor);
+	void debugCheck();
 
+	void Save(const char* filename);
 };

@@ -16,3 +16,17 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+//#include <cassert>
+#include <cmath>
+#include <set>
+#include <tuple>
+#include <functional>
+#include <iostream>
+
+const double eps = 1e-10;
+
+inline void assert(bool x)
+{
+	if(!x)
+		throw 1;
+}
