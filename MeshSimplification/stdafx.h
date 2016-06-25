@@ -23,8 +23,12 @@
 #include <functional>
 #include <iostream>
 #include <list>
+#include <ctime>
+#include <sstream>
 
 const double eps = 1e-10;
+const bool DefaultRecalculate = false;
+const bool DefaultKeepBorder = false;
 
 inline void assert(bool x)
 {

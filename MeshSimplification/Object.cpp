@@ -2,6 +2,11 @@
 #include "Object.h"
 
 #pragma warning(disable:4996)
+
+bool Object::recalculate = DefaultRecalculate;
+bool Object::keepBorder = DefaultKeepBorder;
+
+
 bool Object::Parse(FILE * fp)
 {
 	char buf[256];
@@ -169,9 +174,10 @@ bool Object::Parse(FILE * fp)
 void Object::Edge::makeArg()
 {
 	//如果两个点其中之一有边界点
-	/*if (isnan(a->k.a[0][0]) || isnan(b->k.a[0][0])) {
-		return std::make_tuple(Point{ NAN, NAN, NAN }, INFINITY);
-	}*/
+	if (keepBorder && ifBorderEdge()) {
+		cost = INFINITY;
+		return;
+	}
 
 	//计算部分
 
@@ -235,7 +241,6 @@ void Object::Edge::makeArg()
 
 bool Object::Edge::ifBorderEdge() const
 {
-	//wrong
 	return ap->edgeList.size() != ap->faceList.size() || bp->edgeList.size() != bp->faceList.size();
 }
 
@@ -265,6 +270,18 @@ bool Object::Load(const char *filename)
 	}
 }
 
+
+static bool edgeComp(const Object::Edge* a, const Object::Edge *b)
+{
+	assert(!isnan(a->cost) && !isnan(b->cost));
+	if (a->cost == b->cost) {
+		return a < b;
+	}
+	else {
+		return a->cost < b->cost;
+	}
+}
+
 void Object::simpify(double factor)
 {
 	int nowFaceNum = facePool.size();
@@ -273,7 +290,7 @@ void Object::simpify(double factor)
 	//finalFaceNum = nowFaceNum - 10;
 
 	//堆比较函数
-	auto edgeComp = [](const Edge* a, const Edge *b)
+	/*auto edgeComp = [](const Edge* a, const Edge *b)
 	{
 		assert(!isnan(a->cost) && !isnan(b->cost));
 		if (a->cost == b->cost) {
@@ -281,7 +298,8 @@ void Object::simpify(double factor)
 		} else {
 			return a->cost < b->cost;
 		}
-	};
+	};*/
+	//std::set<Edge*, std::function<bool(const Edge*, const Edge*)>> ss(edgeComp);
 	std::set<Edge*, std::function<bool(const Edge*, const Edge*)>> ss(edgeComp);
 
 	//建堆
@@ -294,14 +312,15 @@ void Object::simpify(double factor)
 
 	while (nowFaceNum > finalFaceNum)
 	{
-		if (nowFaceNum % 1001 == 0) {
+		/*if (nowFaceNum % 1001 == 0) {
 			std::cerr << nowFaceNum << std::endl;
-		}
+		}*/
 		//std::cerr << nowFaceNum << std::endl;
 		//std::cerr << ss.size() << std::endl;
 
-		if (nowFaceNum == 8)
+		/*if (nowFaceNum == 3394) {
 			std::cerr << "";
+		}*/
 
 		Edge* e = *ss.begin();
 		ss.erase(e);
@@ -311,6 +330,15 @@ void Object::simpify(double factor)
 		auto* pa = e->ap;
 		auto* pb = e->bp;
 		if(pa != pa->getroot() || pb != pb->getroot() || pa == pb) continue;
+
+		/*double cost = e->cost;
+		e->makeArg();
+		std::cerr << (e->cost - cost) << std::endl;
+		if (abs(e->cost - cost) > 1e-5) {
+			std::cerr << " " << std::endl;
+		}*/
+
+
 		//if (e->ifBorderEdge()) continue;
 
 		//std::cerr << e->cost << std::endl;
@@ -346,24 +374,37 @@ void Object::simpify(double factor)
 			x++;
 		}
 		pa->edgeList.sort([&pa](const Edge* a, const Edge* b) {
-			return a->findOtherVertex(pa) < b->findOtherVertex(pa);
+			Vertex* ta = a->findOtherVertex(pa);
+			Vertex* tb = b->findOtherVertex(pa);
+			if (ta == tb) {
+				return a < b;
+			} else {
+				return ta < tb;
+			}
 		});
 		pa->edgeList.unique([&pa](const Edge* a, const Edge* b) {
 			return a->findOtherVertex(pa) == b->findOtherVertex(pa);
 		});
+
+		std::vector<Edge*> editEdgeList;
+		if (!recalculate) {
+			editEdgeList.insert(editEdgeList.end(), pa->edgeList.begin(), pa->edgeList.end());
+		}
 		
 		//还原权值,记录涉及到的边
-		std::vector<Edge*> editEdgeList;
+		
 		pa->faceList.sort();
 		pa->faceList.unique();
 		for (auto &nFace = pa->faceList.begin(); nFace != pa->faceList.end(); nFace++) {
 			if (!(*nFace)->ap) continue;
 			(*nFace)->update();
-			//(*nFace)->decreaseNeighborPointArg(); //让周围点减去之前的arg
-
-			editEdgeList.insert(editEdgeList.end(), (*nFace)->ap->edgeList.begin(), (*nFace)->ap->edgeList.end());
-			editEdgeList.insert(editEdgeList.end(), (*nFace)->bp->edgeList.begin(), (*nFace)->bp->edgeList.end());
-			editEdgeList.insert(editEdgeList.end(), (*nFace)->cp->edgeList.begin(), (*nFace)->cp->edgeList.end());
+			
+			if (recalculate) {
+				(*nFace)->decreaseNeighborPointArg(); //让周围点减去之前的arg
+				editEdgeList.insert(editEdgeList.end(), (*nFace)->ap->edgeList.begin(), (*nFace)->ap->edgeList.end());
+				editEdgeList.insert(editEdgeList.end(), (*nFace)->bp->edgeList.begin(), (*nFace)->bp->edgeList.end());
+				editEdgeList.insert(editEdgeList.end(), (*nFace)->cp->edgeList.begin(), (*nFace)->cp->edgeList.end());
+			}
 		}
 
 		//访问生成的点周围的面，去除无效面
@@ -379,8 +420,10 @@ void Object::simpify(double factor)
 				continue;
 			}
 
-			//(*nFace)->makeArg(); //更新权值
-			//(*nFace)->increaseNeighborPointArg(); //让周围点加上现在的arg
+			if (recalculate) {
+				(*nFace)->makeArg(); //更新权值
+				(*nFace)->increaseNeighborPointArg(); //让周围点加上现在的arg
+			}
 
 			nFace++;
 		}
@@ -389,8 +432,9 @@ void Object::simpify(double factor)
 		//为了减少对堆的操作量，对修改进行去重处理
 		sort(editEdgeList.begin(), editEdgeList.end());
 		editEdgeList.resize((unique(editEdgeList.begin(), editEdgeList.end()) - editEdgeList.begin()));
-		for (auto &x : editEdgeList) if(x->update()){
+		for (auto &x : editEdgeList){
 			ss.erase(x);
+			x->update();
 			x->makeArg();
 			ss.insert(x);
 		}

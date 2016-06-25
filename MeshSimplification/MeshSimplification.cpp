@@ -4,13 +4,38 @@
 #include "stdafx.h"
 #include "Object.h"
 
-int main()
+int main(int argc, const char* argv[])
 {
+	std::string inobj, outobj;
+	double rate = 0.01;
+	std::string option;
+
+	if (argc >= 4) {
+		std::stringstream srate(argv[3]);
+		inobj = std::string(argv[1]);
+		outobj = std::string(argv[2]);
+		srate >> rate;
+
+		if (argc >= 5) {
+			option = std::string(argv[4]);
+			if (option.find('r')!= -1) Object::recalculate = true;
+			if (option.find('k')!=-1) Object::keepBorder = true;
+		}
+	} else {
+		inobj = "dragon.obj";
+		outobj = "out.obj";
+	}
+
 	Object obj;
-	obj.Load("data/fixed.perfect.dragon.100K.0.07.obj");
+	int sc = clock();
+	obj.Load(inobj.c_str());
 	//obj.Load("data/block.obj");
-	obj.simpify(0.01);
-	obj.Save("output.obj");
+	int rc = clock();
+	std::cerr << "read time:" << rc - sc << std::endl;
+
+	obj.simpify(rate);
+	obj.Save(outobj.c_str());
+	std::cerr << "process time:" << clock() - rc << std::endl;
     return 0;
 }
 

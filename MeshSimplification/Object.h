@@ -5,6 +5,9 @@
 class Object
 {
 public:
+	static bool recalculate;
+	static bool keepBorder;
+
 	struct Vertex;
 	struct Edge;
 	struct Face;
