@@ -10,6 +10,10 @@ int main(int argc, const char* argv[])
 	double rate = 0.01;
 	std::string option;
 
+	//解析输入参数
+	//形式：MeshSimplification in.obj out.obj rate (r)(k)
+	//r代表缩点后重新计算边权
+	//k代表严格保持边界
 	if (argc >= 4) {
 		std::stringstream srate(argv[3]);
 		inobj = std::string(argv[1]);

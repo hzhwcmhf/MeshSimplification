@@ -125,6 +125,7 @@ bool Object::Parse(FILE * fp)
 			facePool.emplace_back(new Face);
 			auto& f = *facePool.back();
 
+			//插入边表
 			Edge *ae, *be, *ce;
 			ae = a.findNeighborEdge(&b);
 			be = b.findNeighborEdge(&c);
@@ -148,14 +149,15 @@ bool Object::Parse(FILE * fp)
 				a.edgeList.push_back(ce);
 			}
 
+			//构建面边点关系
 			f.ap = &a, f.bp = &b, f.cp = &c;
 			ae->ap = &a, be->ap = &b, ce->ap = &c;
 			ae->bp = &b, be->bp = &c, ce->bp = &a;
 			a.faceList.push_back(&f);
 			c.faceList.push_back(&f);
 			b.faceList.push_back(&f);
-			f.makeArg();
-			f.increaseNeighborPointArg();
+			f.makeArg();//计算面系数矩阵
+			f.increaseNeighborPointArg();//更新端点系数值
 		}
 
 		break;
@@ -173,7 +175,7 @@ bool Object::Parse(FILE * fp)
 
 void Object::Edge::makeArg()
 {
-	//如果两个点其中之一有边界点
+	//如果是边界边，并且需要严格保持边界
 	if (keepBorder && ifBorderEdge()) {
 		cost = INFINITY;
 		return;
@@ -215,6 +217,7 @@ void Object::Edge::makeArg()
 	if (abs(D) < eps) {
 		pos = (ap->p + bp->p) / 2;
 		cost = calCost(pos, k);
+		//如果是边界，增加点移动的代价
 		if (this->ifBorderEdge()) cost += norm(ap->p - pos) + norm(bp->p - pos);
 		return;
 	}
@@ -236,9 +239,11 @@ void Object::Edge::makeArg()
 	) / D;
 	pos = { x, y, z };
 	cost = calCost(pos, k);
+	//如果是边界，增加点移动的代价
 	if (this->ifBorderEdge()) cost += norm(ap->p - pos) + norm(bp->p - pos);
 }
 
+//判断是否为边界边（通过周边面和边的数量判断）
 bool Object::Edge::ifBorderEdge() const
 {
 	return ap->edgeList.size() != ap->faceList.size() || bp->edgeList.size() != bp->faceList.size();
@@ -270,7 +275,7 @@ bool Object::Load(const char *filename)
 	}
 }
 
-
+//堆比较函数
 static bool edgeComp(const Object::Edge* a, const Object::Edge *b)
 {
 	assert(!isnan(a->cost) && !isnan(b->cost));
@@ -282,6 +287,7 @@ static bool edgeComp(const Object::Edge* a, const Object::Edge *b)
 	}
 }
 
+//简化主函数
 void Object::simpify(double factor)
 {
 	int nowFaceNum = facePool.size();
@@ -299,17 +305,17 @@ void Object::simpify(double factor)
 			return a->cost < b->cost;
 		}
 	};*/
-	//std::set<Edge*, std::function<bool(const Edge*, const Edge*)>> ss(edgeComp);
+
+	//用set代替堆
 	std::set<Edge*, std::function<bool(const Edge*, const Edge*)>> ss(edgeComp);
 
 	//建堆
 	for (auto &x : edgePool){
-		//if (x->ifBorderEdge()) continue; //禁止删边界边
-		//std::tie(x->pos, x->cost) = calEdgeCost(x->ap, x->bp);
 		x->makeArg();
 		ss.insert(x.get());
 	}
 
+	//面数量 终止条件
 	while (nowFaceNum > finalFaceNum)
 	{
 		/*if (nowFaceNum % 1001 == 0) {
@@ -322,6 +328,7 @@ void Object::simpify(double factor)
 			std::cerr << "";
 		}*/
 
+		//去除代价最小边
 		Edge* e = *ss.begin();
 		ss.erase(e);
 
@@ -329,38 +336,16 @@ void Object::simpify(double factor)
 
 		auto* pa = e->ap;
 		auto* pb = e->bp;
+		//懒惰删除（如果pa不为pa的root，表明这条边信息已经过期）
 		if(pa != pa->getroot() || pb != pb->getroot() || pa == pb) continue;
 
-		/*double cost = e->cost;
-		e->makeArg();
-		std::cerr << (e->cost - cost) << std::endl;
-		if (abs(e->cost - cost) > 1e-5) {
-			std::cerr << " " << std::endl;
-		}*/
-
-
-		//if (e->ifBorderEdge()) continue;
-
-		//std::cerr << e->cost << std::endl;
-
-
-		/*//去除合并后重边
-		for (auto &x : pa->edgeList) {
-			auto uselessEdge = pb->findNeighborEdge(x->findOtherVertex(pa));
-			if (uselessEdge) {
-				pb->edgeList.remove(uselessEdge);
-
-				//if (!uselessEdge->ifBorderEdge()) {
-				//	ASSERT_DELETE(ss.erase(uselessEdge));
-				//}
-			}
-		}
-		pb->edgeList.remove(pb->findNeighborEdge(pa));*/
-
+		//系数矩阵相加
 		pa->k += pb->k;
 
-		//合并
+		//合并 pb并入pa
 		pb->join(pa);
+
+		//修改合并后的位置
 		pa->p = e->pos;
 
 		//去重边\无效边
@@ -373,6 +358,7 @@ void Object::simpify(double factor)
 			}
 			x++;
 		}
+		//对边表进行一次去重
 		pa->edgeList.sort([&pa](const Edge* a, const Edge* b) {
 			Vertex* ta = a->findOtherVertex(pa);
 			Vertex* tb = b->findOtherVertex(pa);
@@ -386,19 +372,23 @@ void Object::simpify(double factor)
 			return a->findOtherVertex(pa) == b->findOtherVertex(pa);
 		});
 
+
+		//记录修改过的边
 		std::vector<Edge*> editEdgeList;
+		//如果不需重计算，修改的边只有pa周边的边
 		if (!recalculate) {
 			editEdgeList.insert(editEdgeList.end(), pa->edgeList.begin(), pa->edgeList.end());
 		}
 		
-		//还原权值,记录涉及到的边
-		
+		//重新计算权值，更新面的信息
+		//删去合并公用面
 		pa->faceList.sort();
 		pa->faceList.unique();
 		for (auto &nFace = pa->faceList.begin(); nFace != pa->faceList.end(); nFace++) {
 			if (!(*nFace)->ap) continue;
 			(*nFace)->update();
 			
+			//如果需要重新计算，需要修改邻点所有的边
 			if (recalculate) {
 				(*nFace)->decreaseNeighborPointArg(); //让周围点减去之前的arg
 				editEdgeList.insert(editEdgeList.end(), (*nFace)->ap->edgeList.begin(), (*nFace)->ap->edgeList.end());
@@ -413,8 +403,8 @@ void Object::simpify(double factor)
 		for (auto &nFace = pa->faceList.begin(); nFace != pa->faceList.end(); ) {
 			if (!(*nFace)->ap || !(*nFace)->update()) { //无效面
 				if ((*nFace)->ap) {
-					(*nFace)->ap = nullptr;
-					nowFaceNum--;
+					(*nFace)->ap = nullptr;//标记面失效
+					nowFaceNum--;//面数减少计数
 				}
 				nFace = pa->faceList.erase(nFace);
 				continue;
