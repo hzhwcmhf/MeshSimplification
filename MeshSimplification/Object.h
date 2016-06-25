@@ -40,45 +40,58 @@ public:
 			}
 		}
 	};
+
 	struct Vertex
 	{
-		Point p;
-		int id;
-		//Edge* e;
+		Point p;	//顶点位置
+		int id;	//顶点编号
+		
+		std::list<Face*> faceList;
+		std::list<Edge*> edgeList;
+
 		ArgMatrix k;
+		Vertex *pa;	//并查集父亲
+
+		Vertex* getroot();	//并查集寻根
+		void join(Vertex *b);	//并查集合并 自己加入b
+		Edge* findNeighborEdge(Vertex* b) const;	//根据邻点找边
+		//void uniqueEdge(); //修正指向 去除重边/无效边
 	};
 
 	struct Edge
 	{
-		Edge *next, *prev, *pair;
-		Face* f;
-		Vertex *p;
+		Vertex *ap, *bp;
 
 		Point pos;
 		double cost;
+
+		Vertex* findOtherVertex(const Vertex* p) const;
+		bool update();	//无效返回false
+		void makeArg();
+		bool ifBorderEdge() const;
 	};
 
 	struct Face
 	{
 		ArgMatrix k;
-		//Edge* e;
+		Vertex *ap, *bp, *cp;
 
-		void makeArg(const Vertex &ap, const Vertex &bp, const Vertex &cp);
+		void makeArg();
+		bool update(); //无效返回false
+		void increaseNeighborPointArg();
+		void decreaseNeighborPointArg();
 	};
+
 private:
 	std::vector<std::unique_ptr<Vertex>> vertexPool;
 	std::vector<std::unique_ptr<Edge>> edgePool;
 	std::vector<std::unique_ptr<Face>> facePool;
 
 	bool Parse(FILE * fp);
-	void buildStruct();
-
-	std::tuple<Point, double> calEdgeCost(Vertex *a, Vertex *b, Edge* e);
 public:
 	bool Load(const char *filename);
 
 	void simpify(double factor);
-	void debugCheck();
 
 	void Save(const char* filename);
 };

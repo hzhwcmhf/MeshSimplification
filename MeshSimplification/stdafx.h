@@ -22,6 +22,7 @@
 #include <tuple>
 #include <functional>
 #include <iostream>
+#include <list>
 
 const double eps = 1e-10;
 
@@ -30,3 +31,4 @@ inline void assert(bool x)
 	if(!x)
 		throw 1;
 }
+#define ASSERT_DELETE(x) auto tmp = x;assert(tmp==1)

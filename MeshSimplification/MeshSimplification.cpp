@@ -8,6 +8,7 @@ int main()
 {
 	Object obj;
 	obj.Load("data/fixed.perfect.dragon.100K.0.07.obj");
+	//obj.Load("data/block.obj");
 	obj.simpify(0.01);
 	obj.Save("output.obj");
     return 0;
